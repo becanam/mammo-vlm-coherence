@@ -1,0 +1,38 @@
+# data (RSNA / EMBED are under data-use agreements)
+*.dcm
+dicoms/
+*_images/
+*images*/
+qa_overlays/
+rsna_png/
+embed_png/
+unrelated_*/
+*.png
+*.jpg
+*.jpeg
+*.tcia
+
+# benchmarks and model outputs
+output_*/
+results*.json
+MammoVQA*.json
+*.csv
+*.xlsx
+
+# model weights / caches
+checkpoints/
+*.safetensors
+*.bin
+*.pt
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv*/
+*.egg-info/
+
+# misc
+.DS_Store
+*.zip
+logs/

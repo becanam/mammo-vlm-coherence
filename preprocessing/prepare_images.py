@@ -15,16 +15,20 @@ single grayscale file is written per view. EMBED examinations are multi-view: ea
 separate DICOM and is converted independently; the benchmark groups the views and the runner feeds
 them jointly (see pipeline/run_eval.py).
 
-The output basename must match the MammoVQA benchmark path so the runner can find it:
+Each output is named to match its MammoVQA benchmark path so the runner can find it. Pass --dataset
+and the loop builds the right name automatically:
 
   RSNA   /Benchmark/RSNA/<pid>_<iid>_img/img.jpg  ->  <out>/<pid>_<iid>.png   (via --rsna_png)
   EMBED  /Benchmark/EMBED/<acc>/<name>.jpg        ->  <out>/<name>.jpg        (via --embed_png)
 
-  # one file
-  python prepare_images.py --dicom path/to/img.dcm --out rsna_png/<pid>_<iid>.png --format png
+  # RSNA folder: builds <pid>_<iid>.png from the <pid>/<iid>.dcm layout
+  python prepare_images.py --dataset rsna  --dicom_dir path/to/rsna_dicoms  --out_dir rsna_png
 
-  # a whole folder (keeps each file's stem; choose the format)
-  python prepare_images.py --dicom_dir path/to/embed_dicoms --out_dir embed_png --format jpg
+  # EMBED folder: the DICOM stem already equals the benchmark name
+  python prepare_images.py --dataset embed --dicom_dir path/to/embed_dicoms --out_dir embed_png
+
+  # one file (you name the output)
+  python prepare_images.py --dicom path/to/img.dcm --out rsna_png/<pid>_<iid>.png
 """
 import os
 import argparse
@@ -90,6 +94,16 @@ def convert_one(dcm_path: str, out_path: str, max_side: int = MAX_SIDE, crop: bo
         cv2.imwrite(out_path, arr)
 
 
+def out_stem(dcm: Path, dataset: str) -> str:
+    """Output basename (no extension) that matches the MammoVQA path for this DICOM.
+      rsna    -> '<patient>_<image>' from '<patient>/<image>.dcm' (benchmark uses <pid>_<iid>)
+      embed   -> '<image>' (the DICOM stem already equals the benchmark name)
+      generic -> '<image>' (the DICOM stem)"""
+    if dataset == "rsna":
+        return f"{dcm.parent.name}_{dcm.stem}"
+    return dcm.stem
+
+
 def main(a):
     if a.dicom:                                              # single file
         if not a.out:
@@ -100,10 +114,11 @@ def main(a):
 
     if not (a.dicom_dir and a.out_dir):
         raise SystemExit("pass --dicom (+ --out) for one file, or --dicom_dir + --out_dir for a folder")
-    ext = a.format if a.format.startswith(".") else "." + a.format
+    fmt = a.format or ("png" if a.dataset == "rsna" else "jpg")   # dataset default; --format overrides
+    ext = fmt if fmt.startswith(".") else "." + fmt
     n = 0
     for dcm in sorted(Path(a.dicom_dir).rglob("*.dcm")):
-        out_path = os.path.join(a.out_dir, dcm.stem + ext)
+        out_path = os.path.join(a.out_dir, out_stem(dcm, a.dataset) + ext)
         convert_one(str(dcm), out_path, a.max_side, crop=not a.no_crop)
         n += 1
     print(f"converted {n} DICOMs from {a.dicom_dir} -> {a.out_dir}/*{ext}")
@@ -115,7 +130,10 @@ if __name__ == "__main__":
     ap.add_argument("--out", help="output path for --dicom (name it to match the benchmark path)")
     ap.add_argument("--dicom_dir", help="folder of DICOMs (searched recursively)")
     ap.add_argument("--out_dir", help="output folder for --dicom_dir")
-    ap.add_argument("--format", default="jpg", help="jpg (default, quality 90) or png")
+    ap.add_argument("--dataset", choices=["generic", "rsna", "embed"], default="generic",
+                    help="name/format outputs to match the MammoVQA paths: rsna -> <pid>_<iid>.png "
+                         "(from <pid>/<iid>.dcm), embed -> <name>.jpg, generic -> <stem>")
+    ap.add_argument("--format", default=None, help="png or jpg; overrides the per-dataset default")
     ap.add_argument("--max_side", type=int, default=MAX_SIDE, help="downscale so the longer side <= this")
     ap.add_argument("--no_crop", action="store_true", help="skip the breast-region crop")
     main(ap.parse_args())

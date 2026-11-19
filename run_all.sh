@@ -27,11 +27,11 @@ EMBED_DICOM_DIR=""
 # ----------------------------------------------------------------- 1. preprocess
 if [[ -n "$RSNA_DICOM_DIR" ]]; then
   echo "== preprocessing RSNA DICOMs =="
-  python preprocessing/prepare_images.py --dicom_dir "$RSNA_DICOM_DIR" --out_dir "$RSNA_PNG" --format png
+  python preprocessing/prepare_images.py --dataset rsna --dicom_dir "$RSNA_DICOM_DIR" --out_dir "$RSNA_PNG"
 fi
 if [[ -n "$EMBED_DICOM_DIR" ]]; then
   echo "== preprocessing EMBED DICOMs =="
-  python preprocessing/prepare_images.py --dicom_dir "$EMBED_DICOM_DIR" --out_dir "$EMBED_PNG" --format jpg
+  python preprocessing/prepare_images.py --dataset embed --dicom_dir "$EMBED_DICOM_DIR" --out_dir "$EMBED_PNG"
 fi
 
 # ----------------------------------------------------------------- 2. run each model

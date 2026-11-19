@@ -28,13 +28,14 @@ pip install -r requirements.txt
 Three steps — preprocess, run, analyze. `run_all.sh` chains them for one model.
 
 **1. Preprocess** DICOMs to 8-bit images (VOI-LUT → invert `MONOCHROME1` → 0–255 grayscale → breast
-crop → ≤1024 px → JPEG q90):
+crop → ≤1024 px → JPEG q90). Pass `--dataset` and outputs are named to match the MammoVQA paths
+automatically:
 
 ```bash
-python preprocessing/prepare_images.py --dicom_dir /path/to/dicoms --out_dir embed_png --format jpg
+python preprocessing/prepare_images.py --dataset rsna  --dicom_dir /path/to/rsna_dicoms  --out_dir rsna_png
+python preprocessing/prepare_images.py --dataset embed --dicom_dir /path/to/embed_dicoms --out_dir embed_png
 ```
 
-Name each output to match its MammoVQA path (`<rsna_png>/<pid>_<iid>.png`, `<embed_png>/<name>.jpg`).
 EMBED examinations are multi-view; the runner feeds an exam's views together.
 
 **2. Run a model** over the seven conditions (original; unrelated / blank / no image; reworded

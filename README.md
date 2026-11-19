@@ -3,60 +3,42 @@
 ![Perturbations figure](images/perturbations_figure.png)
 
 Code for the paper *Evaluating Coherence Among Answers, Confidence, and Reasoning in Mammography
-Vision-Language Models for Breast Cancer Assessment*. We test whether a model's **answer, confidence,
-and reasoning** agree with each other and with the ground truth on multiple-choice mammography VQA,
-and whether they change sensibly under controlled perturbations.
-
-Each question is answered in one generation. The model gives: (1) an **explicit single-best answer**,
-(2) a 0–100 confidence score for every option (including *None of the above*), and (3) a one-sentence
-explanation. The **explicit answer is the primary signal** — it is always well-defined, so no items
-are dropped for score ties. Tasks are BI-RADS and breast density (ACR); laterality and view are also
-supported.
+Vision-Language Models for Breast Cancer Assessment*. For each multiple-choice mammography question a
+model gives an explicit answer, a 0–100 confidence per option, and a one-sentence explanation; we
+measure whether these agree and how they hold up under controlled perturbations. The explicit answer
+is the primary signal. Tasks: BI-RADS and breast density (ACR).
 
 ## Data
 
-Images are **not distributed here** — RSNA and EMBED are governed by data-use agreements. Obtain the
-four inputs below and point the runner at them.
+Images are **not distributed here** — RSNA and EMBED are governed by data-use agreements.
 
 | Input | Download | Reference | Access |
 |---|---|---|---|
 | **RSNA** screening mammograms | [Link](https://www.kaggle.com/competitions/rsna-breast-cancer-detection/data) | [RSNA Screening Mammography Breast Cancer Detection AI Challenge](https://www.rsna.org/rsnai/ai-image-challenge/screening-mammography-breast-cancer-detection-ai-challenge) | Open |
 | **EMBED** mammograms | [Link](https://registry.opendata.aws/emory-breast-imaging-dataset-embed/) | [The EMBED dataset (3.4M mammographic images)](https://pubs.rsna.org/doi/pdf/10.1148/ryai.220047) | Credentialed |
-| **MammoVQA** benchmark (questions, options, answers) | [Link](https://github.com/PiggyJerry/MammoVQA) | [A Benchmark for Breast Cancer Screening and Diagnosis in Mammogram VQA](https://doi.org/10.1038/s41467-025-66507-z) | Open |
-| **Unrelated images** for the unrelated-photo perturbation (ImageNet sample) | [Link](https://image-net.org) | Deng et al., 2009 | Open |
+| **MammoVQA** benchmark | [Link](https://github.com/PiggyJerry/MammoVQA) | [A Benchmark for Breast Cancer Screening and Diagnosis in Mammogram VQA](https://doi.org/10.1038/s41467-025-66507-z) | Open |
+| **Unrelated images** (ImageNet sample) | [Link](https://image-net.org) | Deng et al., 2009 | Open |
 
-## Pipeline
-
-Three steps — **preprocess → run → analyze**. `run_all.sh` chains all three for one model (edit the
-paths at the top, then `bash run_all.sh`); the sections below explain each. Install dependencies
-first:
+## Usage
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 1. Preprocess
+Three steps — preprocess, run, analyze. `run_all.sh` chains them for one model.
 
-`preprocessing/prepare_images.py` converts each DICOM to an 8-bit image, following MammoVQA's
-conversion (paper, Appendix B):
-
-1. apply VOI-LUT (header windowing); invert `MONOCHROME1`
-2. rescale to 0–255 grayscale; crop to the breast region
-3. downscale the longer side to ≤1024 px; save as JPEG (quality 90)
+**1. Preprocess** DICOMs to 8-bit images (VOI-LUT → invert `MONOCHROME1` → 0–255 grayscale → breast
+crop → ≤1024 px → JPEG q90):
 
 ```bash
 python preprocessing/prepare_images.py --dicom_dir /path/to/dicoms --out_dir embed_png --format jpg
 ```
 
-Name each output to match its MammoVQA path so the runner can find it — RSNA →
-`<rsna_png>/<pid>_<iid>.png`, EMBED → `<embed_png>/<name>.jpg`. EMBED examinations are multi-view:
-each view is converted separately, and the runner feeds an exam's views together. (The grayscale→RGB
-channel replication happens at inference, not here.)
+Name each output to match its MammoVQA path (`<rsna_png>/<pid>_<iid>.png`, `<embed_png>/<name>.jpg`).
+EMBED examinations are multi-view; the runner feeds an exam's views together.
 
-### 2. Run a model
-
-Queries one model over the seven conditions (original; unrelated / blank / no image; reworded
-question; shuffled options; shuffled options + distractors):
+**2. Run a model** over the seven conditions (original; unrelated / blank / no image; reworded
+question; shuffled options; shuffled + distractors):
 
 ```bash
 cd pipeline
@@ -68,12 +50,8 @@ python run_eval.py \
     --output_dir output_<model>
 ```
 
-Writes `output_<model>/results.json` — per item and condition: the explicit answer
-(`explicit_answer`, primary), the per-option scores and score-argmax (`scores`/`pred_text`,
-secondary), the explanation, and the raw output. Resumes if interrupted. Model backends live in
-`pipeline/vlm_inference.py`.
-
-**Reordering alone (Figure 5)** is a separate run that reshuffles the options without distractors:
+Reordering options alone (Figure 5) is a separate run; the `shuffle_*` name keeps it out of the main
+`output_*` glob:
 
 ```bash
 python run_shuffle_only.py \
@@ -82,24 +60,15 @@ python run_shuffle_only.py \
     --output_dir shuffle_<model>
 ```
 
-The `shuffle_*` name keeps these results out of the main `output_*` glob.
-
-### 3. Analyze
-
-All analysis uses the explicit answer (keep-ties). Run from the repo root; `--help` lists options.
-Each module defaults to `--glob "output_*/results.json"` and `--topics birads,acr`.
+**3. Analyze** from the repo root (default glob `output_*/results.json`, `--topics birads,acr`; `--help`
+for options):
 
 | Command | Output |
 |---|---|
-| `python -m analysis.coherence gap` | answer accuracy vs reasoning accuracy, with the disconnect taxonomy |
-| `python -m analysis.confidence gt` | confidence trajectories as visual evidence is removed |
+| `python -m analysis.coherence gap` | answer vs reasoning accuracy, with the disconnect taxonomy |
+| `python -m analysis.confidence gt` | confidence as visual evidence is removed |
 | `python -m analysis.nota rate` | *None of the above* selection across conditions |
-| `python -m analysis.perturbation flips` | answer-change rate under option/wording perturbations |
-| `python -m analysis.mcnemar` | exact McNemar significance (SciPy) of each perturbation |
+| `python -m analysis.perturbation flips` | answer-change rate under perturbations |
+| `python -m analysis.mcnemar` | exact McNemar significance (SciPy) |
 
-Figure 5 uses the shuffle-only results:
-`python -m analysis.perturbation flips --conditions shuffle_only --glob "shuffle_*/results.json"`.
-
-`signals/` holds the shared extractors: the reasoning-answer matcher (`reasoning_parser.py`),
-reasoning certainty (`reasoning_confidence.py`), matcher-vs-human validation with Cohen's κ via
-scikit-learn (`parser_validation.py`), and the secondary score-argmax map (`answer_mapping.py`).
+Figure 5: `python -m analysis.perturbation flips --conditions shuffle_only --glob "shuffle_*/results.json"`.
